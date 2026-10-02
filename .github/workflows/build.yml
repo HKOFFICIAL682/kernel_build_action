@@ -16,7 +16,7 @@ jobs:
     - name: Setup Build Environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc build-essential libssl-dev libcrypto++-dev tcl-dev tk-dev uuid-dev libgpgme-dev gnupg2 git curl zip libelf-dev lld-11 llvm-11
+        sudo apt-get install -y bc build-essential libssl-dev libcrypto++-dev tcl-dev tk-dev uuid-dev libgpgme-dev gnupg2 git curl zip libelf-dev lld llvm
 
     - name: Download Toolchains (AOSP Clang & GCC)
       run: |
@@ -48,6 +48,9 @@ jobs:
         echo "CONFIG_HZ_1000=y" >> arch/arm64/configs/surya_defconfig
         echo "CONFIG_HZ=1000" >> arch/arm64/configs/surya_defconfig
         echo "CONFIG_TOUCHSCREEN_BIAC=y" >> arch/arm64/configs/surya_defconfig
+        # OxygenOS Port boot karne ke liye SElinux settings add ki hain
+        echo "CONFIG_SECURITY_SELINUX_DEVELOP=y" >> arch/arm64/configs/surya_defconfig
+        echo "CONFIG_SECURITY_SELINUX_BOOTPARAM=y" >> arch/arm64/configs/surya_defconfig
 
     - name: Build Kernel Core
       run: |
@@ -73,6 +76,11 @@ jobs:
         git clone https://github.com AnyKernel3
         cp kernel-source/arch/arm64/boot/Image.gz-dtb AnyKernel3/ || cp kernel-source/arch/arm64/boot/Image.gz AnyKernel3/ || true
         cd AnyKernel3
+        
+        # OxygenOS Port block aur slot detection fix
+        sed -i 's/block=\/dev\/block\/bootdevice\/by-name\/boot;/block=auto;/g' anykernel.sh
+        sed -i 's/is_slot_device=0;/is_slot_device=auto;/g' anykernel.sh
+        
         zip -r9 ../Overclocked-Kernel-PocoX3.zip *
 
     - name: Upload Flashable Kernel
