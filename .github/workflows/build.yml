@@ -5,13 +5,23 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
 
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
+
+    - name: Setup Build Environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc build-essential libssl-dev git curl zip libelf-dev bison flex libssl-dev ccache
+
+    - name: Setup Official AOSP Clang Toolchain
+      uses: android-linux-stable/clang-action@v2
+      with:
+        clang-version: r383912
 
     - name: Download Official LineageOS Kernel Source
       uses: actions/checkout@v4
@@ -37,22 +47,22 @@ jobs:
         echo "CONFIG_HZ=1000" >> arch/arm64/configs/surya_defconfig
         echo "CONFIG_TOUCHSCREEN_BIAC=y" >> arch/arm64/configs/surya_defconfig
         
-        # OxygenOS & Port ROM Boot Fixes (SElinux Permissive Capability)
+        # OxygenOS Port Boot Fixes (SElinux capability)
         echo "CONFIG_SECURITY_SELINUX_DEVELOP=y" >> arch/arm64/configs/surya_defconfig
         echo "CONFIG_SECURITY_SELINUX_BOOTPARAM=y" >> arch/arm64/configs/surya_defconfig
 
-    - name: Build Kernel using Failure-Proof Proton Clang
+    - name: Build Kernel Core
       run: |
-        # GitHub Container se direct verified kernel compiler environment use kar rahe hain
-        docker run --rm -v ${{ github.workspace }}:/work -w /work/kernel-source ubuntu:20.04 bash -c "
-          apt-get update && apt-get install -y bc build-essential libssl-dev git curl zip libelf-dev bison flex
-          git clone --depth=1 https://github.com /work/clang
-          export PATH='/work/clang/bin:\$PATH'
-          export ARCH=arm64
-          export SUBARCH=arm64
-          make surya_defconfig
-          make -j\$(nproc) CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-
-        "
+        cd kernel-source
+        export ARCH=arm64
+        export SUBARCH=arm64
+        
+        make surya_defconfig
+        
+        make -j$(nproc) \
+          CC=clang \
+          CLANG_TRIPLE=aarch64-linux-gnu- \
+          CROSS_COMPILE=aarch64-linux-gnu-
 
     - name: Package AnyKernel3 Flashable Zip
       run: |
@@ -60,7 +70,7 @@ jobs:
         cp kernel-source/arch/arm64/boot/Image.gz-dtb AnyKernel3/ || cp kernel-source/arch/arm64/boot/Image.gz AnyKernel3/ || true
         cd AnyKernel3
         
-        # Port ROM aur OxygenOS ke liye dynamic block mounting setting
+        # OxygenOS aur Port ROMs ke liye block detection handle karna
         sed -i 's/block=\/dev\/block\/bootdevice\/by-name\/boot;/block=auto;/g' anykernel.sh
         sed -i 's/is_slot_device=0;/is_slot_device=auto;/g' anykernel.sh
         
