@@ -5,17 +5,55 @@ on:
 
 jobs:
   build:
-    name: Build Kernel Core
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
     steps:
-      - name: Build Engine Execution
-        uses: dabao1955/kernel_build_action@main
-        with:
-          kernel-url: https://github.com
-          kernel-branch: lineage-20
-          config: surya_defconfig
-          arch: arm64
-          aosp-gcc: true
-          aosp-clang: true
-          android-version: 13
-          anykernel3: true
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Dynamic Build Tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc build-essential libssl-dev libcrypto++-dev tcl-dev tk-dev uuid-dev libgpgme-dev gnupg2 git curl zip libelf-dev clang lld llvm
+
+    - name: Download OxygenOS Compatible Kernel Source
+      uses: actions/checkout@v4
+      with:
+        repository: daoudeddy/surya-docker-kernel
+        ref: main
+        path: kernel-source
+
+    - name: Apply Overclock and High Bullet Register Tweaks
+      run: |
+        cd kernel-source
+        sed -i 's/575000000/650000000/g' arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi || true
+        sed -i 's/610000000/650000000/g' arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi || true
+        sed -i 's/2304000/2457600/g' arch/arm64/boot/dts/vendor/qcom/sm6150.dtsi || true
+        echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> arch/arm64/configs/surya-docker_defconfig
+        echo "CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y" >> arch/arm64/configs/surya-docker_defconfig
+        echo "CONFIG_HZ_1000=y" >> arch/arm64/configs/surya-docker_defconfig
+        echo "CONFIG_HZ=1000" >> arch/arm64/configs/surya-docker_defconfig
+        echo "CONFIG_TOUCHSCREEN_BIAC=y" >> arch/arm64/configs/surya-docker_defconfig
+
+    - name: Build Kernel Core Engine
+      run: |
+        cd kernel-source
+        export ARCH=arm64
+        export SUBARCH=arm64
+        make surya-docker_defconfig
+        make -j$(nproc) CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu-
+        
+    - name: Package AnyKernel3 Flashable Zip
+      run: |
+        git clone https://github.com AnyKernel3
+        cp kernel-source/arch/arm64/boot/Image.gz-dtb AnyKernel3/ || cp kernel-source/arch/arm64/boot/Image.gz AnyKernel3/ || true
+        cd AnyKernel3
+        zip -r9 ../Overclocked-Kernel-PocoX3.zip *
+
+    - name: Upload Flashable Kernel
+      uses: actions/upload-artifact@v4
+      with:
+        name: Overclocked-Kernel-PocoX3
+        path: Overclocked-Kernel-PocoX3.zip
