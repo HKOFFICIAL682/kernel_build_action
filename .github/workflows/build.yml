@@ -7,16 +7,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
 
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Setup Build Environment
+    - name: Setup Ultimate Build Environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc build-essential libssl-dev libcrypto++-dev tcl-dev tk-dev uuid-dev libgpgme-dev gnupg2 git curl zip
+        sudo apt-get install -y bc build-essential libssl-dev libcrypto++-dev tcl-dev tk-dev uuid-dev libgpgme-dev gnupg2 git curl zip libc6-dev-i386 lib32ncurses6 lib32z1 libelf-dev
 
     - name: Download Official LineageOS Kernel Source
       uses: actions/checkout@v4
@@ -50,8 +50,9 @@ jobs:
         export ARCH=arm64
         export SUBARCH=arm64
         export PATH="$(pwd)/../toolchain/bin:$PATH"
+        export LD_LIBRARY_PATH="$(pwd)/../toolchain/lib:$LD_LIBRARY_PATH"
         make surya_defconfig
-        make -j$(nproc)
+        make -j$(nproc) CROSS_COMPILE=aarch64-linux-gnu- KBUILD_COMPILER_STRING="Proton-Clang"
         
     - name: Package AnyKernel3 Flashable Zip
       run: |
