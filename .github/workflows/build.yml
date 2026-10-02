@@ -11,102 +11,63 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Build Environment
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            bc \
-            build-essential \
-            gcc-aarch64-linux-gnu \
-            binutils-aarch64-linux-gnu \
-            libssl-dev \
-            libelf-dev \
-            flex \
-            bison \
-            cpio \
-            git \
-            curl \
-            zip \
-            unzip \
-            clang \
-            lld \
-            llvm \
-            python3
-
-      - name: Download Official LineageOS Kernel Source
+      - name: Checkout Kernel Source
         uses: actions/checkout@v4
         with:
           repository: LineageOS/android_kernel_xiaomi_surya
           ref: lineage-20
           path: kernel-source
 
-      - name: Apply Performance and Size Tweaks
+      - name: Setup Build Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc build-essential gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libssl-dev libelf-dev flex bison cpio git curl zip unzip clang lld llvm python3
+
+      - name: Prepare Config
         run: |
           cd kernel-source
-
-          # Remove duplicate configuration entries
-          sed -i '/CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=/d' arch/arm64/configs/surya_defconfig
-          sed -i '/CONFIG_CC_OPTIMIZE_FOR_SIZE=/d' arch/arm64/configs/surya_defconfig
-          sed -i '/CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=/d' arch/arm64/configs/surya_defconfig
-          sed -i '/CONFIG_HZ_1000=/d' arch/arm64/configs/surya_defconfig
-          sed -i '/CONFIG_HZ=/d' arch/arm64/configs/surya_defconfig
-          sed -i '/CONFIG_DEBUG_INFO=/d' arch/arm64/configs/surya_defconfig
-
-          # Optimize kernel size
+          sed -i '/CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=/d' arch/arm64/configs/surya_defconfig || true
+          sed -i '/CONFIG_CC_OPTIMIZE_FOR_SIZE=/d' arch/arm64/configs/surya_defconfig || true
+          sed -i '/CONFIG_DEBUG_INFO=/d' arch/arm64/configs/surya_defconfig || true
           echo 'CONFIG_CC_OPTIMIZE_FOR_SIZE=y' >> arch/arm64/configs/surya_defconfig
           echo 'CONFIG_DEBUG_INFO=n' >> arch/arm64/configs/surya_defconfig
 
-          # Performance configuration
-          echo 'CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y' >> arch/arm64/configs/surya_defconfig
-          echo 'CONFIG_HZ_1000=y' >> arch/arm64/configs/surya_defconfig
-          echo 'CONFIG_HZ=1000' >> arch/arm64/configs/surya_defconfig
-
-      - name: Build Kernel Core
+      - name: Build Kernel
         run: |
           cd kernel-source
-
           export ARCH=arm64
           export SUBARCH=arm64
+          make O=out ARCH=arm64 surya_defconfig
+          make -j$(nproc) O=out ARCH=arm64 CC=clang LD=ld.lld LLVM=1 CROSS_COMPILE=aarch64-linux-gnu-
 
-          make O=out surya_defconfig
-
-          make -j$(nproc) \
-            O=out \
-            ARCH=arm64 \
-            CC=clang \
-            LD=ld.lld \
-            LLVM=1 \
-            CROSS_COMPILE=aarch64-linux-gnu-
-
-      - name: Package AnyKernel3 Flashable Zip
+      - name: Check Image
         run: |
-          git clone --depth=1 \
-            https://github.com/osm0sis/AnyKernel3.git \
-            AnyKernel3
+          ls -lh kernel-source/out/arch/arm64/boot/Image*
 
+      - name: Download AnyKernel3
+        run: |
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
+
+      - name: Copy Kernel
+        run: |
           if [ -f kernel-source/out/arch/arm64/boot/Image.gz-dtb ]; then
-            cp kernel-source/out/arch/arm64/boot/Image.gz-dtb \
-              AnyKernel3/Image.gz-dtb
-
+            cp kernel-source/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
           elif [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
-            cp kernel-source/out/arch/arm64/boot/Image.gz \
-              AnyKernel3/Image.gz
-
+            cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/
+          elif [ -f kernel-source/out/arch/arm64/boot/Image ]; then
+            cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/
           else
             echo "Kernel image not found!"
             exit 1
           fi
 
+      - name: Create ZIP
+        run: |
           cd AnyKernel3
+          zip -r9 ../Poco-X3-NFC-Kernel.zip . -x "*.md" ".git/*"
 
-          zip -r9 ../Overclocked-Kernel-PocoX3-Fixed.zip . \
-            -x '.git/*' '*.md'
-
-      - name: Upload Flashable Kernel
+      - name: Upload ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: Overclocked-Kernel-PocoX3-Fixed
-          path: Overclocked-Kernel-PocoX3-Fixed.zip
+          name: Poco-X3-NFC-Kernel
+          path: Poco-X3-NFC-Kernel.zip
