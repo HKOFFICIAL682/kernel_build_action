@@ -16,14 +16,30 @@ jobs:
     - name: Setup Dynamic Build Tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc build-essential libssl-dev libcrypto++-dev tcl-dev tk-dev uuid-dev libgpgme-dev gnupg2 git curl zip libelf-dev clang lld llvm
+        sudo apt-get install -y bc build-essential libssl-dev libcrypto++-dev tcl-dev tk-dev uuid-dev libgpgme-dev gnupg2 git curl zip libelf-dev openjdk-11-jdk
 
-    - name: Download OxygenOS Compatible Kernel Source
+    - name: Download LineageOS Source
       uses: actions/checkout@v4
       with:
-        repository: daoudeddy/surya-docker-kernel
-        ref: main
+        repository: LineageOS/android_kernel_xiaomi_surya
+        ref: lineage-20
         path: kernel-source
+
+    - name: Download Integrated AOSP Clang
+      uses: actions/checkout@v4
+      with:
+        repository: mvaisakh/gcc-arm64
+        ref: master
+        path: toolchain-gcc
+
+    - name: Download Auxiliary Clang Components
+      uses: actions/checkout@v4
+      with:
+        repository: llvm/llvm-project
+        ref: release/15.x
+        sparse-checkout: |
+          clang
+        path: toolchain-clang
 
     - name: Apply Overclock and High Bullet Register Tweaks
       run: |
@@ -31,19 +47,20 @@ jobs:
         sed -i 's/575000000/650000000/g' arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi || true
         sed -i 's/610000000/650000000/g' arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi || true
         sed -i 's/2304000/2457600/g' arch/arm64/boot/dts/vendor/qcom/sm6150.dtsi || true
-        echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> arch/arm64/configs/surya-docker_defconfig
-        echo "CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y" >> arch/arm64/configs/surya-docker_defconfig
-        echo "CONFIG_HZ_1000=y" >> arch/arm64/configs/surya-docker_defconfig
-        echo "CONFIG_HZ=1000" >> arch/arm64/configs/surya-docker_defconfig
-        echo "CONFIG_TOUCHSCREEN_BIAC=y" >> arch/arm64/configs/surya-docker_defconfig
+        echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> arch/arm64/configs/surya_defconfig
+        echo "CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y" >> arch/arm64/configs/surya_defconfig
+        echo "CONFIG_HZ_1000=y" >> arch/arm64/configs/surya_defconfig
+        echo "CONFIG_HZ=1000" >> arch/arm64/configs/surya_defconfig
+        echo "CONFIG_TOUCHSCREEN_BIAC=y" >> arch/arm64/configs/surya_defconfig
 
     - name: Build Kernel Core Engine
       run: |
         cd kernel-source
         export ARCH=arm64
         export SUBARCH=arm64
-        make surya-docker_defconfig
-        make -j$(nproc) CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu-
+        export PATH="$(pwd)/../toolchain-gcc/bin:$(pwd)/../toolchain-clang/clang/bin:$PATH"
+        make surya_defconfig
+        make -j$(nproc) CROSS_COMPILE=aarch64-linux-gnu-
         
     - name: Package AnyKernel3 Flashable Zip
       run: |
