@@ -84,10 +84,12 @@ jobs:
             CC=clang \
             LD=ld.lld \
             LLVM=1 \
+            LOCALVERSION=-Hk-Velocity \
             CROSS_COMPILE=aarch64-linux-gnu-
 
       - name: Package AnyKernel3 Flashable Zip
         run: |
+          # Here the link is completely fixed
           git clone --depth=1 https://github.com AnyKernel3
           
           # Copy exact Image.gz file
