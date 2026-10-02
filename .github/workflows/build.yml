@@ -18,17 +18,10 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y bc build-essential libssl-dev libcrypto++-dev tcl-dev tk-dev uuid-dev libgpgme-dev gnupg2 git curl zip libelf-dev lld llvm
 
-    - name: Download Toolchains (AOSP Clang & GCC)
+    - name: Clone Proton Clang Toolchain (Foolproof Download)
       run: |
-        mkdir -p toolchains
-        cd toolchains
-        # Download AOSP Clang 11.0.2 (Recommended for 4.14/4.19 kernels)
-        curl -LO https://googlesource.com
-        mkdir clang && tar -xf clang-r383912.tar.gz -C clang
-        
-        # Download Prebuilt Aarch64 GCC for Cross Compilation
-        curl -LO https://googlesource.com
-        mkdir gcc64 && tar -xf android11-release.tar.gz -C gcc64
+        # Proton Clang android kernel building ke liye sab se best aur stable mana jata hai aur error nahi deta
+        git clone --depth=1 https://github.com toolchains/clang
 
     - name: Download Official LineageOS Kernel Source
       uses: actions/checkout@v4
@@ -48,7 +41,8 @@ jobs:
         echo "CONFIG_HZ_1000=y" >> arch/arm64/configs/surya_defconfig
         echo "CONFIG_HZ=1000" >> arch/arm64/configs/surya_defconfig
         echo "CONFIG_TOUCHSCREEN_BIAC=y" >> arch/arm64/configs/surya_defconfig
-        # OxygenOS Port boot karne ke liye SElinux settings add ki hain
+        
+        # OxygenOS Port boot karne ke liye SElinux settings
         echo "CONFIG_SECURITY_SELINUX_DEVELOP=y" >> arch/arm64/configs/surya_defconfig
         echo "CONFIG_SECURITY_SELINUX_BOOTPARAM=y" >> arch/arm64/configs/surya_defconfig
 
@@ -56,21 +50,21 @@ jobs:
       run: |
         cd kernel-source
         
-        # Sahi toolchain paths set karein
-        export PATH="$GITHUB_WORKSPACE/toolchains/clang/bin:$GITHUB_WORKSPACE/toolchains/gcc64/bin:$PATH"
+        # Proton Clang ka path configure kiya
+        export PATH="$GITHUB_WORKSPACE/toolchains/clang/bin:$PATH"
         
         export ARCH=arm64
         export SUBARCH=arm64
         
-        # Config generate karein
+        # Defconfig load karein
         make surya_defconfig
         
-        # Proper parameters ke sath build start karein
+        # Proton Clang ke saath stable compilation command
         make -j$(nproc) \
           CC=clang \
-          CLANG_TRIPLE=aarch64-linux-gnu- \
-          CROSS_COMPILE=aarch64-linux-android-
-        
+          CROSS_COMPILE=aarch64-linux-gnu- \
+          CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+
     - name: Package AnyKernel3 Flashable Zip
       run: |
         git clone https://github.com AnyKernel3
