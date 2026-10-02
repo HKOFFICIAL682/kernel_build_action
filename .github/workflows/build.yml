@@ -1,4 +1,4 @@
-name: Build Overclocked Kernel for Poco X3
+name: Build Kernel for Poco X3 NFC
 
 on:
   workflow_dispatch:
@@ -6,78 +6,125 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+
     permissions:
       contents: read
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    - name: Setup Build Environment
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y bc build-essential libssl-dev git curl zip libelf-dev bison flex libssl-dev ccache
+      - name: Setup Build Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc \
+            build-essential \
+            gcc-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu \
+            libssl-dev \
+            libelf-dev \
+            flex \
+            bison \
+            cpio \
+            git \
+            curl \
+            zip \
+            unzip \
+            clang \
+            lld \
+            llvm \
+            python3
 
-    - name: Setup Official AOSP Clang Toolchain
-      uses: android-linux-stable/clang-action@v2
-      with:
-        clang-version: r383912
+      - name: Download Official LineageOS Kernel Source
+        uses: actions/checkout@v4
+        with:
+          repository: LineageOS/android_kernel_xiaomi_surya
+          ref: lineage-20
+          path: kernel-source
 
-    - name: Download Official LineageOS Kernel Source
-      uses: actions/checkout@v4
-      with:
-        repository: LineageOS/android_kernel_xiaomi_surya
-        ref: lineage-20
-        path: kernel-source
+      - name: Apply Performance Tweaks
+        run: |
+          cd kernel-source
 
-    - name: Apply Overclock and Performance Tweaks
-      run: |
-        cd kernel-source
-        # GPU Overclock to 650MHz
-        sed -i 's/575000000/650000000/g' arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi || true
-        sed -i 's/610000000/650000000/g' arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi || true
-        
-        # CPU Overclock to 2.45GHz
-        sed -i 's/2304000/2457600/g' arch/arm64/boot/dts/vendor/qcom/sm6150.dtsi || true
-        
-        # Performance & Gaming Profiles
-        echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> arch/arm64/configs/surya_defconfig
-        echo "CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y" >> arch/arm64/configs/surya_defconfig
-        echo "CONFIG_HZ_1000=y" >> arch/arm64/configs/surya_defconfig
-        echo "CONFIG_HZ=1000" >> arch/arm64/configs/surya_defconfig
-        echo "CONFIG_TOUCHSCREEN_BIAC=y" >> arch/arm64/configs/surya_defconfig
-        
-        # OxygenOS Port Boot Fixes (SElinux capability)
-        echo "CONFIG_SECURITY_SELINUX_DEVELOP=y" >> arch/arm64/configs/surya_defconfig
-        echo "CONFIG_SECURITY_SELINUX_BOOTPARAM=y" >> arch/arm64/configs/surya_defconfig
+          # GPU frequency
+          sed -i 's/575000000/650000000/g' \
+            arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi || true
 
-    - name: Build Kernel Core
-      run: |
-        cd kernel-source
-        export ARCH=arm64
-        export SUBARCH=arm64
-        
-        make surya_defconfig
-        
-        make -j$(nproc) \
-          CC=clang \
-          CLANG_TRIPLE=aarch64-linux-gnu- \
-          CROSS_COMPILE=aarch64-linux-gnu-
+          sed -i 's/610000000/650000000/g' \
+            arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi || true
 
-    - name: Package AnyKernel3 Flashable Zip
-      run: |
-        git clone https://github.com AnyKernel3
-        cp kernel-source/arch/arm64/boot/Image.gz-dtb AnyKernel3/ || cp kernel-source/arch/arm64/boot/Image.gz AnyKernel3/ || true
-        cd AnyKernel3
-        
-        # OxygenOS aur Port ROMs ke liye block detection handle karna
-        sed -i 's/block=\/dev\/block\/bootdevice\/by-name\/boot;/block=auto;/g' anykernel.sh
-        sed -i 's/is_slot_device=0;/is_slot_device=auto;/g' anykernel.sh
-        
-        zip -r9 ../Overclocked-Gaming-Kernel-Surya.zip *
+          # CPU frequency
+          sed -i 's/2304000/2457600/g' \
+            arch/arm64/boot/dts/vendor/qcom/sm6150.dtsi || true
 
-    - name: Upload Overclocked Kernel Release
-      uses: actions/upload-artifact@v4
-      with:
-        name: Overclocked-Gaming-Kernel-Surya
-        path: Overclocked-Gaming-Kernel-Surya.zip
+          # Remove previous duplicate config entries
+          sed -i '/CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=/d' \
+            arch/arm64/configs/surya_defconfig
+
+          sed -i '/CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=/d' \
+            arch/arm64/configs/surya_defconfig
+
+          sed -i '/CONFIG_HZ_1000=/d' \
+            arch/arm64/configs/surya_defconfig
+
+          sed -i '/CONFIG_HZ=/d' \
+            arch/arm64/configs/surya_defconfig
+
+          # Performance configuration
+          echo 'CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y' >> \
+            arch/arm64/configs/surya_defconfig
+
+          echo 'CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y' >> \
+            arch/arm64/configs/surya_defconfig
+
+          echo 'CONFIG_HZ_1000=y' >> \
+            arch/arm64/configs/surya_defconfig
+
+          echo 'CONFIG_HZ=1000' >> \
+            arch/arm64/configs/surya_defconfig
+
+      - name: Build Kernel
+        run: |
+          cd kernel-source
+
+          export ARCH=arm64
+          export SUBARCH=arm64
+
+          make O=out surya_defconfig
+
+          make -j$(nproc) \
+            O=out \
+            ARCH=arm64 \
+            CC=clang \
+            LD=ld.lld \
+            LLVM=1 \
+            CROSS_COMPILE=aarch64-linux-gnu-
+
+      - name: Package AnyKernel3 Flashable Zip
+        run: |
+          git clone --depth=1 \
+            https://github.com/osm0sis/AnyKernel3.git \
+            AnyKernel3
+
+          if [ -f kernel-source/out/arch/arm64/boot/Image.gz-dtb ]; then
+            cp kernel-source/out/arch/arm64/boot/Image.gz-dtb \
+              AnyKernel3/
+          elif [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
+            cp kernel-source/out/arch/arm64/boot/Image.gz \
+              AnyKernel3/
+          else
+            echo "Kernel image not found!"
+            exit 1
+          fi
+
+          cd AnyKernel3
+
+          zip -r9 ../Overclocked-Kernel-PocoX3.zip . \
+            -x '.git/*' '*.md'
+
+      - name: Upload Flashable Kernel
+        uses: actions/upload-artifact@v4
+        with:
+          name: Overclocked-Kernel-PocoX3
+          path: Overclocked-Kernel-PocoX3.zip
