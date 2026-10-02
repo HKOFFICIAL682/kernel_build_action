@@ -16,7 +16,7 @@ jobs:
     - name: Setup Build Environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc build-essential libssl-dev libcrypto++-dev tcl-dev tk-dev uuid-dev libgpgme-dev gnupg2 git curl zip libelf-dev clang lld llvm
+        sudo apt-get install -y bc build-essential libssl-dev libcrypto++-dev tcl-dev tk-dev uuid-dev libgpgme-dev gnupg2 git curl zip libelf-dev gcc-aarch64-linux-gnu
 
     - name: Download LineageOS Source
       uses: actions/checkout@v4
@@ -43,7 +43,7 @@ jobs:
         export ARCH=arm64
         export SUBARCH=arm64
         make surya_defconfig
-        make -j$(nproc) CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu-
+        make -j$(nproc) CROSS_COMPILE=aarch64-linux-gnu-
         
     - name: Package AnyKernel3 Flashable Zip
       run: |
