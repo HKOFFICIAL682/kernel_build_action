@@ -1,3 +1,4 @@
+
 name: Build Kernel for Poco X3 NFC
 
 on:
@@ -21,42 +22,20 @@ jobs:
       - name: Setup Build Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            bc \
-            build-essential \
-            gcc-aarch64-linux-gnu \
-            binutils-aarch64-linux-gnu \
-            libssl-dev \
-            libelf-dev \
-            flex \
-            bison \
-            cpio \
-            git \
-            curl \
-            zip \
-            unzip \
-            clang \
-            lld \
-            llvm \
-            python3
+          sudo apt-get install -y bc build-essential gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libssl-dev libelf-dev flex bison cpio git curl zip unzip clang lld llvm python3
 
-      - name: Prepare Kernel Config
+      - name: Prepare Config
         run: |
           cd kernel-source
-
-          # Clean previous conflicting config entries
           sed -i '/CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=/d' arch/arm64/configs/surya_defconfig || true
           sed -i '/CONFIG_CC_OPTIMIZE_FOR_SIZE=/d' arch/arm64/configs/surya_defconfig || true
           sed -i '/CONFIG_DEBUG_INFO=/d' arch/arm64/configs/surya_defconfig || true
-
-          # Reduce unnecessary debug information
           echo 'CONFIG_CC_OPTIMIZE_FOR_SIZE=y' >> arch/arm64/configs/surya_defconfig
           echo 'CONFIG_DEBUG_INFO=n' >> arch/arm64/configs/surya_defconfig
 
       - name: Build Kernel
         run: |
           cd kernel-source
-
           export ARCH=arm64
           export SUBARCH=arm64
 
@@ -70,55 +49,33 @@ jobs:
             LLVM=1 \
             CROSS_COMPILE=aarch64-linux-gnu-
 
-      - name: Check Kernel Image
+      - name: Check Image
         run: |
-          cd kernel-source/out/arch/arm64/boot
-
-          echo "=== Kernel files ==="
-          ls -lh Image* || true
-
-          if [ -f Image.gz-dtb ]; then
-            echo "Found Image.gz-dtb"
-            stat -c "Size: %s bytes" Image.gz-dtb
-          elif [ -f Image.gz ]; then
-            echo "Found Image.gz"
-            stat -c "Size: %s bytes" Image.gz
-          elif [ -f Image ]; then
-            echo "Found Image"
-            stat -c "Size: %s bytes" Image
-          else
-            echo "Kernel image not found!"
-            exit 1
-          fi
+          ls -lh kernel-source/out/arch/arm64/boot/Image*
 
       - name: Download AnyKernel3
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
 
-      - name: Package Kernel
+      - name: Copy Kernel
         run: |
-          cd kernel-source/out/arch/arm64/boot
-
-          if [ -f Image.gz-dtb ]; then
-            cp Image.gz-dtb ../../../../../AnyKernel3/Image.gz-dtb
-          elif [ -f Image.gz ]; then
-            cp Image.gz ../../../../../AnyKernel3/Image.gz
-          elif [ -f Image ]; then
-            cp Image ../../../../../AnyKernel3/Image
+          if [ -f kernel-source/out/arch/arm64/boot/Image.gz-dtb ]; then
+            cp kernel-source/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
+          elif [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
+            cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/
+          elif [ -f kernel-source/out/arch/arm64/boot/Image ]; then
+            cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/
           else
             echo "Kernel image not found!"
             exit 1
           fi
 
-      - name: Create Flashable ZIP
+      - name: Create ZIP
         run: |
           cd AnyKernel3
-          rm -rf .git
+          zip -r9 ../Poco-X3-NFC-Kernel.zip . -x "*.md" ".git/*"
 
-          zip -r9 ../Poco-X3-NFC-Kernel.zip . \
-            -x "*.md" "*.git*"
-
-      - name: Upload Kernel ZIP
+      - name: Upload ZIP
         uses: actions/upload-artifact@v4
         with:
           name: Poco-X3-NFC-Kernel
