@@ -7,7 +7,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
 
     steps:
     - name: Checkout Code
@@ -20,7 +20,7 @@ jobs:
 
     - name: Download Toolchain and Source
       run: |
-        git clone https://github.com --depth=1 -b 13.0 kernel-source
+        git clone https://github.com --depth=1 -b 13 kernel-source
         git clone https://github.com --depth=1 toolchain
 
     - name: Apply Overclock and High Bullet Register Tweaks
@@ -47,7 +47,7 @@ jobs:
     - name: Package AnyKernel3 Flashable Zip
       run: |
         git clone https://github.com AnyKernel3
-        cp kernel-source/arch/arm64/boot/Image.gz-dtb AnyKernel3/
+        cp kernel-source/arch/arm64/boot/Image.gz-dtb AnyKernel3/ || cp kernel-source/arch/arm64/boot/Image.gz AnyKernel3/
         cd AnyKernel3
         zip -r9 ../Overclocked-Kernel-PocoX3.zip *
 
