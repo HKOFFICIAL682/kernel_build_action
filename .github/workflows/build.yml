@@ -1,30 +1,37 @@
-# A simple action usage
-name: Build Kernel
+name: Build Kernel for Poco X3
+
 on:
   workflow_dispatch:
 
 jobs:
-  Build-Kernel:
-    strategy:
-      fail-fast: false
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
 
     steps:
-      - name: Build Kernel
-        uses: dabao1955/kernel_build_action@main
-        with:
-          kernel-url: https://github.com/AcmeUI-Devices/android_kernel_xiaomi_cas
-          kernel-dir: msm-4.19
-          kernel-branch: taffy
-          config: cas_defconfig
-          arch: arm64
-          aosp-gcc: true
-          aosp-clang: true
-          ksu: true
-          ksu-version: main
-          android-version: 12
-          aosp-clang-version: r383902
-          disable-lto: true
-          anykernel3: true
+    - name: Build Kernel Engine
+      uses: dabao1955/kernel_build_action@main
+      with:
+        kernel-url: https://github.com
+        kernel-dir: msm-4.19
+        kernel-branch: 13.0
+        config: surya_defconfig
+        arch: arm64
+        aosp-gcc: true
+        aosp-clang: true
+        ksu: true
+        android-version: 13
+        anykernel3: true
+
+    - name: Apply Overclock and High Bullet Register Tweaks
+      run: |
+        cd kernel-source
+        sed -i 's/575000000/650000000/g' arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi
+        sed -i 's/610000000/650000000/g' arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi
+        sed -i 's/2304000/2457600/g' arch/arm64/boot/dts/vendor/qcom/sm6150.dtsi
+        echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> arch/arm64/configs/surya_defconfig
+        echo "CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y" >> arch/arm64/configs/surya_defconfig
+        echo "CONFIG_HZ_1000=y" >> arch/arm64/configs/surya_defconfig
+        echo "CONFIG_HZ=1000" >> arch/arm64/configs/surya_defconfig
+        echo "CONFIG_TOUCHSCREEN_BIAC=y" >> arch/arm64/configs/surya_defconfig
