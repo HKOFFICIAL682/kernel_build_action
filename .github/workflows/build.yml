@@ -7,7 +7,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
 
     steps:
     - name: Checkout Code
@@ -18,11 +18,11 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y bc build-essential libssl-dev libcrypto++-dev tcl-dev tk-dev uuid-dev libgpgme-dev gnupg2 git curl zip
 
-    - name: Download Kernel Source Directly
+    - name: Download Official LineageOS Kernel Source
       uses: actions/checkout@v4
       with:
-        repository: mahajant99/kernel_xiaomi_surya
-        ref: 13
+        repository: LineageOS/android_kernel_xiaomi_surya
+        ref: lineage-20
         path: kernel-source
 
     - name: Download Proton Clang Toolchain
@@ -65,4 +65,3 @@ jobs:
       with:
         name: Overclocked-Kernel-PocoX3
         path: Overclocked-Kernel-PocoX3.zip
-
