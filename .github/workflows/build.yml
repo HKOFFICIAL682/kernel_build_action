@@ -43,56 +43,41 @@ jobs:
           ref: lineage-20
           path: kernel-source
 
-      - name: Apply Performance Tweaks
+      - name: Apply Performance and Size Tweaks
         run: |
           cd kernel-source
 
-          # GPU frequency
-          sed -i 's/575000000/650000000/g' \
-            arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi || true
+          # GPU frequency overclock
+          sed -i 's/575000000/650000000/g' arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi || true
+          sed -i 's/610000000/650000000/g' arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi || true
 
-          sed -i 's/610000000/650000000/g' \
-            arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi || true
+          # CPU frequency overclock
+          sed -i 's/2304000/2457600/g' arch/arm64/boot/dts/vendor/qcom/sm6150.dtsi || true
 
-          # CPU frequency
-          sed -i 's/2304000/2457600/g' \
-            arch/arm64/boot/dts/vendor/qcom/sm6150.dtsi || true
+          # Cleanup previous dynamic entries
+          sed -i '/CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=/d' arch/arm64/configs/surya_defconfig
+          sed -i '/CONFIG_CC_OPTIMIZE_FOR_SIZE=/d' arch/arm64/configs/surya_defconfig
+          sed -i '/CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=/d' arch/arm64/configs/surya_defconfig
+          sed -i '/CONFIG_HZ_1000=/d' arch/arm64/configs/surya_defconfig
+          sed -i '/CONFIG_HZ=/d' arch/arm64/configs/surya_defconfig
+          sed -i '/CONFIG_DEBUG_INFO=/d' arch/arm64/configs/surya_defconfig
 
-          # Remove previous duplicate config entries
-          sed -i '/CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=/d' \
-            arch/arm64/configs/surya_defconfig
+          # Optimize for SIZE to fit into Poco X3 partition block
+          echo 'CONFIG_CC_OPTIMIZE_FOR_SIZE=y' >> arch/arm64/configs/surya_defconfig
+          echo 'CONFIG_DEBUG_INFO=n' >> arch/arm64/configs/surya_defconfig
+          
+          # Performance tweaks
+          echo 'CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y' >> arch/arm64/configs/surya_defconfig
+          echo 'CONFIG_HZ_1000=y' >> arch/arm64/configs/surya_defconfig
+          echo 'CONFIG_HZ=1000' >> arch/arm64/configs/surya_defconfig
 
-          sed -i '/CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=/d' \
-            arch/arm64/configs/surya_defconfig
-
-          sed -i '/CONFIG_HZ_1000=/d' \
-            arch/arm64/configs/surya_defconfig
-
-          sed -i '/CONFIG_HZ=/d' \
-            arch/arm64/configs/surya_defconfig
-
-          # Performance configuration
-          echo 'CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y' >> \
-            arch/arm64/configs/surya_defconfig
-
-          echo 'CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y' >> \
-            arch/arm64/configs/surya_defconfig
-
-          echo 'CONFIG_HZ_1000=y' >> \
-            arch/arm64/configs/surya_defconfig
-
-          echo 'CONFIG_HZ=1000' >> \
-            arch/arm64/configs/surya_defconfig
-
-      - name: Build Kernel
+      - name: Build Kernel Core
         run: |
           cd kernel-source
-
           export ARCH=arm64
           export SUBARCH=arm64
 
           make O=out surya_defconfig
-
           make -j$(nproc) \
             O=out \
             ARCH=arm64 \
@@ -103,28 +88,29 @@ jobs:
 
       - name: Package AnyKernel3 Flashable Zip
         run: |
-          git clone --depth=1 \
-            https://github.com/osm0sis/AnyKernel3.git \
-            AnyKernel3
-
+          git clone --depth=1 https://github.com AnyKernel3
+          
+          # Copy exact Image.gz file
           if [ -f kernel-source/out/arch/arm64/boot/Image.gz-dtb ]; then
-            cp kernel-source/out/arch/arm64/boot/Image.gz-dtb \
-              AnyKernel3/
+            cp kernel-source/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/Image.gz-dtb
           elif [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
-            cp kernel-source/out/arch/arm64/boot/Image.gz \
-              AnyKernel3/
+            cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
           else
             echo "Kernel image not found!"
             exit 1
           fi
 
           cd AnyKernel3
-
-          zip -r9 ../Overclocked-Kernel-PocoX3.zip . \
-            -x '.git/*' '*.md'
+          
+          # Auto-configure anykernel script for Poco X3 block points natively
+          sed -i 's/block=\/dev\/block\/platform\/omap\/omap_hsmmc.0\/by-name\/boot;/block=auto;/g' anykernel.sh
+          sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
+          
+          # Clean and proper root level compression
+          zip -r9 ../Overclocked-Kernel-PocoX3-Fixed.zip . -x '.git/*' '*.md'
 
       - name: Upload Flashable Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: Overclocked-Kernel-PocoX3
-          path: Overclocked-Kernel-PocoX3.zip
+          name: Overclocked-Kernel-PocoX3-Fixed
+          path: Overclocked-Kernel-PocoX3-Fixed.zip
