@@ -18,15 +18,19 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y bc build-essential libssl-dev libcrypto++-dev tcl-dev tk-dev uuid-dev libgpgme-dev gnupg2 git curl zip
 
-    - name: Download Source Package Directly
-      run: |
-        curl -L https://github.com -o kernel.tar.gz
-        mkdir kernel-source
-        tar -xzf kernel.tar.gz -C kernel-source --strip-components=1
-        
-        curl -L https://github.com -o toolchain.tar.gz
-        mkdir toolchain
-        tar -xzf toolchain.tar.gz -C toolchain --strip-components=1
+    - name: Download Kernel Source Directly
+      uses: actions/checkout@v4
+      with:
+        repository: mahajant99/kernel_xiaomi_surya
+        ref: 13
+        path: kernel-source
+
+    - name: Download Proton Clang Toolchain
+      uses: actions/checkout@v4
+      with:
+        repository: kdrag0n/proton-clang
+        ref: master
+        path: toolchain
 
     - name: Apply Overclock and High Bullet Register Tweaks
       run: |
@@ -51,9 +55,7 @@ jobs:
         
     - name: Package AnyKernel3 Flashable Zip
       run: |
-        curl -L https://github.com -o anykernel.tar.gz
-        mkdir AnyKernel3
-        tar -xzf anykernel.tar.gz -C AnyKernel3 --strip-components=1
+        git clone https://github.com AnyKernel3
         cp kernel-source/arch/arm64/boot/Image.gz-dtb AnyKernel3/ || cp kernel-source/arch/arm64/boot/Image.gz AnyKernel3/ || true
         cd AnyKernel3
         zip -r9 ../Overclocked-Kernel-PocoX3.zip *
@@ -63,3 +65,4 @@ jobs:
       with:
         name: Overclocked-Kernel-PocoX3
         path: Overclocked-Kernel-PocoX3.zip
+
