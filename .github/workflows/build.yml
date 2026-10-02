@@ -11,7 +11,7 @@ jobs:
 
     steps:
     - name: Build Kernel Engine
-      uses: dabao1955/kernel_build_action@main
+      uses: dabao1955/kernel_build_action@v1.4
       with:
         kernel-url: https://github.com
         kernel-dir: msm-4.19
