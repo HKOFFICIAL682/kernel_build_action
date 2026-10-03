@@ -86,7 +86,10 @@ jobs:
             exit 1
           fi
 
-          cd AnyKernel3
+                    cd AnyKernel3
+          sed -i 's#^block=.*#block=auto;#' anykernel.sh
+
+          zip -r9 ../Overclocked-Kernel-PocoX3-Fixed.zip . -x '.git/*' '*.md' 
 
           zip -r9 ../Overclocked-Kernel-PocoX3-Fixed.zip . -x '.git/*' '*.md'
 
