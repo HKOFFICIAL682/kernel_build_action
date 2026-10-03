@@ -47,19 +47,13 @@ jobs:
         run: |
           cd kernel-source
 
-          # GPU frequency overclock
-          sed -i 's/575000000/650000000/g' arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi || true
-          sed -i 's/610000000/650000000/g' arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi || true
-
-          # CPU frequency overclock
-          sed -i 's/2304000/2457600/g' arch/arm64/boot/dts/vendor/qcom/sm6150.dtsi || true
-
+          
+        
           # Cleanup previous dynamic entries
           sed -i '/CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=/d' arch/arm64/configs/surya_defconfig
           sed -i '/CONFIG_CC_OPTIMIZE_FOR_SIZE=/d' arch/arm64/configs/surya_defconfig
           sed -i '/CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=/d' arch/arm64/configs/surya_defconfig
-          sed -i '/CONFIG_HZ_1000=/d' arch/arm64/configs/surya_defconfig
-          sed -i '/CONFIG_HZ=/d' arch/arm64/configs/surya_defconfig
+          
           sed -i '/CONFIG_DEBUG_INFO=/d' arch/arm64/configs/surya_defconfig
 
           # Optimize for SIZE to fit into Poco X3 partition block
@@ -68,8 +62,7 @@ jobs:
           
           # Performance tweaks
           echo 'CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y' >> arch/arm64/configs/surya_defconfig
-          echo 'CONFIG_HZ_1000=y' >> arch/arm64/configs/surya_defconfig
-          echo 'CONFIG_HZ=1000' >> arch/arm64/configs/surya_defconfig
+          
 
       - name: Build Kernel Core
         run: |
@@ -87,11 +80,11 @@ jobs:
             CROSS_COMPILE=aarch64-linux-gnu-
 
       - name: Package AnyKernel3 Flashable Zip
-        run: |
-          git clone --depth=1 https://github.com AnyKernel3
-          
-          # Copy exact Image.gz file
-          if [ -f kernel-source/out/arch/arm64/boot/Image.gz-dtb ]; then
+        run:   
+             git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3 AnyKernel3
+         
+         # Copy exact Image.gz file
+       if [ -f kernel-source/out/arch/arm64/boot/Image.gz-dtb ]; then
             cp kernel-source/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/Image.gz-dtb
           elif [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
             cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
