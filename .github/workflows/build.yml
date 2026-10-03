@@ -43,34 +43,28 @@ jobs:
           ref: lineage-20
           path: kernel-source
 
-      - name: Apply Performance and Size Tweaks
+      - name: Apply Size Tweaks
         run: |
           cd kernel-source
 
-          
-        
-          # Cleanup previous dynamic entries
           sed -i '/CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=/d' arch/arm64/configs/surya_defconfig
           sed -i '/CONFIG_CC_OPTIMIZE_FOR_SIZE=/d' arch/arm64/configs/surya_defconfig
-          sed -i '/CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=/d' arch/arm64/configs/surya_defconfig
-          
           sed -i '/CONFIG_DEBUG_INFO=/d' arch/arm64/configs/surya_defconfig
+          sed -i '/CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=/d' arch/arm64/configs/surya_defconfig
 
-          # Optimize for SIZE to fit into Poco X3 partition block
           echo 'CONFIG_CC_OPTIMIZE_FOR_SIZE=y' >> arch/arm64/configs/surya_defconfig
-          echo 'CONFIG_DEBUG_INFO=n'
-          
-          # Performance tweaks
+          echo 'CONFIG_DEBUG_INFO=n' >> arch/arm64/configs/surya_defconfig
           echo 'CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y' >> arch/arm64/configs/surya_defconfig
-          
 
       - name: Build Kernel Core
         run: |
           cd kernel-source
+
           export ARCH=arm64
           export SUBARCH=arm64
 
           make O=out surya_defconfig
+
           make -j$(nproc) \
             O=out \
             ARCH=arm64 \
@@ -80,11 +74,10 @@ jobs:
             CROSS_COMPILE=aarch64-linux-gnu-
 
       - name: Package AnyKernel3 Flashable Zip
-        run:   
-             git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3 AnyKernel3
-         
-         # Copy exact Image.gz file
-       if [ -f kernel-source/out/arch/arm64/boot/Image.gz-dtb ]; then
+        run: |
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
+
+          if [ -f kernel-source/out/arch/arm64/boot/Image.gz-dtb ]; then
             cp kernel-source/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/Image.gz-dtb
           elif [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
             cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
@@ -94,12 +87,7 @@ jobs:
           fi
 
           cd AnyKernel3
-          
-          # Auto-configure anykernel script for Poco X3 block points natively
-          sed -i 's/block=\/dev\/block\/platform\/omap\/omap_hsmmc.0\/by-name\/boot;/block=auto;/g' anykernel.sh
-          sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
-          
-          # Clean and proper root level compression
+
           zip -r9 ../Overclocked-Kernel-PocoX3-Fixed.zip . -x '.git/*' '*.md'
 
       - name: Upload Flashable Kernel
