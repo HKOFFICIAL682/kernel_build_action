@@ -1,66 +1,23 @@
-name: Build Surya Kernel
+name: Build POCO X3 NFC Kernel
 
 on:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout kernel source
-        uses: actions/checkout@v4
+      - name: Build Kernel
+        uses: HKOFFICIAL682/kernel_build_action@main
         with:
-          repository: Stratosphere-Kernel/android_kernel_xiaomi_surya
-          ref: staging/LA.UM.9.x
-          path: kernel
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            bc \
-            bison \
-            build-essential \
-            ccache \
-            clang \
-            flex \
-            gcc-aarch64-linux-gnu \
-            libelf-dev \
-            libssl-dev \
-            lld \
-            llvm \
-            make \
-            python3 \
-            zip
-
-      - name: Build kernel
-        run: |
-          cd kernel
-
-          export ARCH=arm64
-          export SUBARCH=arm64
-          export LLVM=1
-          export LLVM_IAS=1
-
-          make O=out ARCH=arm64 surya_defconfig
-
-          make -j$(nproc) \
-            O=out \
-            ARCH=arm64 \
-            LLVM=1 \
-            LLVM_IAS=1
-
-      - name: Find kernel image
-        run: |
-          find kernel/out/arch/arm64/boot -maxdepth 2 -type f -print
-
-      - name: Upload kernel
-        uses: actions/upload-artifact@v4
-        with:
-          name: surya-kernel-build
-          path: |
-            kernel/out/arch/arm64/boot/Image
-            kernel/out/arch/arm64/boot/Image.gz
-            kernel/out/arch/arm64/boot/Image.gz-dtb
-          if-no-files-found: warn
+          kernel-url: https://github.com/LineageOS/android_kernel_xiaomi_surya
+          kernel-branch: lineage-20
+          config: surya_defconfig
+          arch: arm64
+          android-version: 13
+          aosp-clang: true
+          anykernel3: true
