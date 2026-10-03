@@ -1,30 +1,150 @@
-# A simple action usage
-name: Build Kernel
+name: Build Surya Maximum Performance Kernel
+
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  Build-Kernel:
-    strategy:
-      fail-fast: false
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
+  build:
+    runs-on: ubuntu-22.04
 
     steps:
-      - name: Build Kernel
-        uses: dabao1955/kernel_build_action@main
+      - name: Checkout StormBreaker Surya kernel
+        uses: actions/checkout@v4
         with:
-          kernel-url: https://github.com/AcmeUI-Devices/android_kernel_xiaomi_cas
-          kernel-dir: msm-4.19
-          kernel-branch: taffy
-          config: cas_defconfig
-          arch: arm64
-          aosp-gcc: true
-          aosp-clang: true
-          ksu: true
-          ksu-version: main
-          android-version: 12
-          aosp-clang-version: r383902
-          disable-lto: true
-          anykernel3: true
+          repository: stormbreaker-project/kernel_xiaomi_surya
+          ref: staging/main
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc \
+            bison \
+            build-essential \
+            ccache \
+            clang \
+            flex \
+            gcc-aarch64-linux-gnu \
+            gcc-arm-linux-gnueabi \
+            git \
+            libssl-dev \
+            lld \
+            llvm \
+            python3 \
+            rsync \
+            unzip \
+            zip
+
+      - name: Detect Surya defconfig
+        shell: bash
+        run: |
+          set -e
+
+          echo "Available ARM64 defconfigs:"
+          find arch/arm64/configs -maxdepth 1 -type f \
+            -name '*_defconfig' -printf '%f\n' | sort
+
+          DEFCONFIG="$(find arch/arm64/configs -maxdepth 1 -type f \
+            \( -iname '*surya*_defconfig' \
+            -o -iname '*surya*.config' \
+            -o -iname '*umi*_defconfig' \) \
+            -printf '%f\n' | head -n 1)"
+
+          if [ -z "$DEFCONFIG" ]; then
+            echo "::error::No Surya-specific defconfig was found."
+            echo "Do NOT guess a defconfig."
+            exit 1
+          fi
+
+          echo "Using defconfig: $DEFCONFIG"
+          echo "DEFCONFIG=$DEFCONFIG" >> "$GITHUB_ENV"
+
+      - name: Prepare output
+        run: |
+          rm -rf out
+          mkdir -p out
+
+      - name: Generate kernel configuration
+        shell: bash
+        run: |
+          set -e
+
+          make \
+            O=out \
+            ARCH=arm64 \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            "$DEFCONFIG"
+
+          echo "===== Kernel configuration summary ====="
+
+          grep -E \
+            'CONFIG_(ARCH_QCOM|SMP|PREEMPT|CPU_FREQ|CPU_FREQ_GOV_PERFORMANCE|CPU_FREQ_GOV_SCHEDUTIL|DEVFREQ|DEVFREQ_GOV_PERFORMANCE|KGSL|MSM_KGSL|INPUT|TOUCHSCREEN)' \
+            out/.config || true
+
+      - name: Build kernel
+        shell: bash
+        run: |
+          set -e
+
+          make \
+            -j"$(nproc)" \
+            O=out \
+            ARCH=arm64 \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            KCFLAGS="-O2"
+
+      - name: Verify build output
+        shell: bash
+        run: |
+          set -e
+
+          echo "===== Kernel outputs ====="
+          find out/arch/arm64/boot -maxdepth 2 -type f -printf '%p\n' | sort
+
+          if [ ! -f out/arch/arm64/boot/Image ]; then
+            echo "::error::Kernel Image was not produced."
+            exit 1
+          fi
+
+          echo "===== Kernel version ====="
+          make \
+            O=out \
+            ARCH=arm64 \
+            LLVM=1 \
+            kernelversion
+
+          echo "===== SHA256 ====="
+          sha256sum out/arch/arm64/boot/Image
+
+      - name: Package build artifacts
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p release
+
+          cp out/arch/arm64/boot/Image \
+            release/Image
+
+          [ -f out/arch/arm64/boot/dtb ] && \
+            cp out/arch/arm64/boot/dtb release/dtb || true
+
+          [ -f out/arch/arm64/boot/Image.gz-dtb ] && \
+            cp out/arch/arm64/boot/Image.gz-dtb release/Image.gz-dtb || true
+
+          cp out/.config release/kernel.config
+
+          sha256sum release/* > release/SHA256SUMS
+
+      - name: Upload kernel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: surya-max-performance-kernel
+          path: release/
+          if-no-files-found: error
