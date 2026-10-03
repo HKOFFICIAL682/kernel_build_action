@@ -1,23 +1,116 @@
-name: Build POCO X3 NFC Kernel
+name: Build Kernel for Poco X3 NFC
 
 on:
   workflow_dispatch:
-
-permissions:
-  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-22.04
 
+    permissions:
+      contents: read
+
     steps:
-      - name: Build Kernel
-        uses: HKOFFICIAL682/kernel_build_action@main
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Build Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc \
+            build-essential \
+            gcc-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu \
+            libssl-dev \
+            libelf-dev \
+            flex \
+            bison \
+            cpio \
+            git \
+            curl \
+            zip \
+            unzip \
+            clang \
+            lld \
+            llvm \
+            python3
+
+      - name: Download Official LineageOS Kernel Source
+        uses: actions/checkout@v4
         with:
-          kernel-url: https://github.com/LineageOS/android_kernel_xiaomi_surya
-          kernel-branch: lineage-20
-          config: surya_defconfig
-          arch: arm64
-          android-version: 13
-          aosp-clang: true
-          anykernel3: true
+          repository: LineageOS/android_kernel_xiaomi_surya
+          ref: lineage-20
+          path: kernel-source
+
+      - name: Apply Performance and Size Tweaks
+        run: |
+          cd kernel-source
+
+          # GPU frequency overclock
+          sed -i 's/575000000/650000000/g' arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi || true
+          sed -i 's/610000000/650000000/g' arch/arm64/boot/dts/vendor/qcom/sm6150-gpu.dtsi || true
+
+          # CPU frequency overclock
+          sed -i 's/2304000/2457600/g' arch/arm64/boot/dts/vendor/qcom/sm6150.dtsi || true
+
+          # Cleanup previous dynamic entries
+          sed -i '/CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=/d' arch/arm64/configs/surya_defconfig
+          sed -i '/CONFIG_CC_OPTIMIZE_FOR_SIZE=/d' arch/arm64/configs/surya_defconfig
+          sed -i '/CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=/d' arch/arm64/configs/surya_defconfig
+          sed -i '/CONFIG_HZ_1000=/d' arch/arm64/configs/surya_defconfig
+          sed -i '/CONFIG_HZ=/d' arch/arm64/configs/surya_defconfig
+          sed -i '/CONFIG_DEBUG_INFO=/d' arch/arm64/configs/surya_defconfig
+
+          # Optimize for SIZE to fit into Poco X3 partition block
+          echo 'CONFIG_CC_OPTIMIZE_FOR_SIZE=y' >> arch/arm64/configs/surya_defconfig
+          echo 'CONFIG_DEBUG_INFO=n'
+          
+          # Performance tweaks
+          echo 'CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y' >> arch/arm64/configs/surya_defconfig
+          echo 'CONFIG_HZ_1000=y' >> arch/arm64/configs/surya_defconfig
+          echo 'CONFIG_HZ=1000' >> arch/arm64/configs/surya_defconfig
+
+      - name: Build Kernel Core
+        run: |
+          cd kernel-source
+          export ARCH=arm64
+          export SUBARCH=arm64
+
+          make O=out surya_defconfig
+          make -j$(nproc) \
+            O=out \
+            ARCH=arm64 \
+            CC=clang \
+            LD=ld.lld \
+            LLVM=1 \
+            CROSS_COMPILE=aarch64-linux-gnu-
+
+      - name: Package AnyKernel3 Flashable Zip
+        run: |
+          git clone --depth=1 https://github.com AnyKernel3
+          
+          # Copy exact Image.gz file
+          if [ -f kernel-source/out/arch/arm64/boot/Image.gz-dtb ]; then
+            cp kernel-source/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/Image.gz-dtb
+          elif [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
+            cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
+          else
+            echo "Kernel image not found!"
+            exit 1
+          fi
+
+          cd AnyKernel3
+          
+          # Auto-configure anykernel script for Poco X3 block points natively
+          sed -i 's/block=\/dev\/block\/platform\/omap\/omap_hsmmc.0\/by-name\/boot;/block=auto;/g' anykernel.sh
+          sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
+          
+          # Clean and proper root level compression
+          zip -r9 ../Overclocked-Kernel-PocoX3-Fixed.zip . -x '.git/*' '*.md'
+
+      - name: Upload Flashable Kernel
+        uses: actions/upload-artifact@v4
+        with:
+          name: Overclocked-Kernel-PocoX3-Fixed
+          path: Overclocked-Kernel-PocoX3-Fixed.zip
